@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ระบบจัดการคลังสินค้า WMS</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
+  --text:#e2e8f0; --muted:#94a3b8; --pri:#2563eb; --pri2:#1d4ed8;
+  --ok:#16a34a; --okbg:#052e16; --err:#dc2626; --errbg:#3f0a0a;
+  --warn:#d97706; --accent:#0ea5e9;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;font-family:"Segoe UI",Tahoma,"Sarabun",sans-serif;background:var(--bg);color:var(--text);font-size:15px}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px}
+.hidden{display:none!important}
+
+/* ===== Login ===== */
+#login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:16px}
+.login-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.login-card h1{margin:0 0 4px;font-size:22px;text-align:center}
+.login-card .sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:20px}
+.login-card .logo{font-size:42px;text-align:center;margin-bottom:8px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+.field input,.field select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text)}
+.field input:focus,.field select:focus{outline:none;border-color:var(--pri)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border:none;border-radius:9px;background:var(--pri);color:#fff;font-weight:600;font-size:15px}
+.btn:hover{background:var(--pri2)}
+.btn.full{width:100%}
+.btn.gray{background:var(--panel2);border:1px solid var(--line)}
+.btn.gray:hover{background:var(--line)}
+.btn.ok{background:var(--ok)}
+.btn.err{background:var(--err)}
+.btn.sm{padding:7px 11px;font-size:13px}
+.hint{font-size:12px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.6}
+
+/* ===== App shell ===== */
+#app{display:none;min-height:100vh}
+header.topbar{position:sticky;top:0;z-index:40;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:10px 14px}
+header .brand{font-weight:700;font-size:16px;display:flex;align-items:center;gap:8px}
+header .spacer{flex:1}
+header .who{font-size:13px;color:var(--muted);text-align:right;line-height:1.3}
+header .who b{color:var(--text)}
+.role-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--pri);color:#fff;margin-top:2px}
+.role-badge.staff{background:var(--accent)}
+
+/* nav */
+nav.tabs{position:sticky;top:53px;z-index:30;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:0 0 auto;background:none;border:none;color:var(--muted);padding:13px 16px;font-size:14px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
+nav.tabs button.active{color:var(--text);border-bottom-color:var(--pri)}
+
+main{padding:16px;max-width:1100px;margin:0 auto}
+.view{display:none}
+.view.active{display:block;animation:fade .2s}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h2.page{margin:0 0 4px;font-size:20px}
+.page-sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+
+/* cards / grid */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .n{font-size:26px;font-weight:700}
+.stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+.stat.blue{border-left:4px solid var(--pri)}
+.stat.green{border-left:4px solid var(--ok)}
+.stat.cyan{border-left:4px solid var(--accent)}
+.stat.amber{border-left:4px solid var(--warn)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.panel h3{margin:0 0 12px;font-size:16px}
+
+/* mode selector */
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.mode-btn{padding:16px 8px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--text);text-align:center;font-weight:700}
+.mode-btn .ic{font-size:26px;display:block;margin-bottom:4px}
+.mode-btn small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:2px}
+.mode-btn.active.in{border-color:var(--ok);background:var(--okbg)}
+.mode-btn.active.out{border-color:var(--err);background:var(--errbg)}
+.mode-btn.active.move{border-color:var(--accent);background:#082f49}
+
+/* scan steps */
+.scan-step{margin-bottom:14px;opacity:.45;pointer-events:none;transition:.2s}
+.scan-step.on{opacity:1;pointer-events:auto}
+.scan-step.done .step-no{background:var(--ok)}
+.step-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.step-no{width:24px;height:24px;border-radius:50%;background:var(--line);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.step-head label{font-size:14px;font-weight:600}
+.scan-input{display:flex;gap:8px}
+.scan-input input{flex:1;padding:13px;font-size:17px;border:2px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--text)}
+.scan-input input:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.25)}
+.resolved{font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+.resolved.ok{border-color:var(--ok);background:var(--okbg)}
+.resolved.err{border-color:var(--err);background:var(--errbg)}
+
+/* feedback flash */
+#flash{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:200;min-width:260px;max-width:90vw;padding:14px 18px;border-radius:12px;font-weight:600;text-align:center;display:none;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+#flash.ok{background:var(--ok);color:#fff;display:block}
+#flash.err{background:var(--err);color:#fff;display:block}
+#flash .big{font-size:18px}
+#flash .det{font-size:13px;font-weight:400;opacity:.95;margin-top:3px}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--panel2);color:var(--muted);font-weight:600;position:sticky;top:0}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:600}
+.pill.in{background:var(--okbg);color:#4ade80}
+.pill.out{background:var(--errbg);color:#f87171}
+.pill.move{background:#082f49;color:#38bdf8}
+.muted{color:var(--muted)}
+.lowstock{color:#f87171;font-weight:700}
+
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.toolbar input,.toolbar select{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text)}
+.toolbar .grow{flex:1;min-width:140px}
+
+/* forms grid */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.fgrid .field{margin-bottom:0}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal-bg.on{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:100%;max-width:480px;max-height:90vh;overflow:auto;padding:20px}
+.modal h3{margin:0 0 14px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+.row-actions{display:flex;gap:6px}
+.icon-btn{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:5px 9px;color:var(--text);font-size:12px}
+.icon-btn:hover{background:var(--line)}
+.icon-btn.del:hover{background:var(--err);border-color:var(--err)}
+
+#reader{margin-top:10px;border-radius:10px;overflow:hidden;max-width:340px}
+.cam-toggle{margin-top:8px}
+.empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:14px}
+.qty-input{width:120px!important}
+@media(max-width:600px){
+  main{padding:12px}
+  .cards{grid-template-columns:repeat(2,1fr)}
+  header .brand{font-size:14px}
+  .modes{gap:6px}
+  .mode-btn{padding:12px 4px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login">
+  <form class="login-card" onsubmit="doLogin(event)">
+    <div class="logo">📦</div>
+    <h1>ระบบจัดการคลังสินค้า</h1>
+    <div class="sub">Warehouse Management System (WMS)</div>
+    <div class="field">
+      <label>ชื่อผู้ใช้</label>
+      <input id="lg-user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="username" required>
+    </div>
+    <div class="field">
+      <label>รหัสผ่าน</label>
+      <input id="lg-pass" type="password" autocomplete="current-password" placeholder="••••••" required>
+    </div>
+    <button class="btn full" type="submit">เข้าสู่ระบบ</button>
+    <div class="hint">
+      ผู้ดูแล: <b>admin / 1234</b><br>
+      พนักงานคลัง: <b>staff / 1234</b>
+    </div>
+  </form>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand">📦 <span>WMS คลังสินค้า</span></div>
+    <div class="spacer"></div>
+    <div class="who">
+      <b id="me-name">-</b><br>
+      <span id="me-role" class="role-badge">-</span>
+    </div>
+    <button class="btn gray sm" onclick="logout()">ออก</button>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <main>
+    <div class="view" id="v-dashboard"></div>
+    <div class="view" id="v-scan"></div>
+    <div class="view" id="v-stock"></div>
+    <div class="view" id="v-log"></div>
+    <div class="view" id="v-transfer"></div>
+    <div class="view" id="v-products"></div>
+    <div class="view" id="v-warehouses"></div>
+    <div class="view" id="v-locations"></div>
+    <div class="view" id="v-users"></div>
+  </main>
+</div>
+
+<div id="flash"></div>
+<div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+
+<script>
+/* =========================================================
+   WMS — Single File Web App
+   ข้อมูลเก็บใน localStorage | transaction เป็น atomic (JS single-thread)
+   timezone: Asia/Bangkok
+   ========================================================= */
+"use strict";
+const DB_KEY = "wms_db_v1";
+const SESSION_KEY = "wms_session";
+const uid = (p="id")=> p+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ---------- Bangkok time ---------- */
+function nowBKK(){ return new Date(); }
+function fmtBKK(iso){
+  const d = new Date(iso);
+  return d.toLocaleString("th-TH",{timeZone:"Asia/Bangkok",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+function fmtBKKshort(iso){
+  const d = new Date(iso);
+  return d.toLocaleString("th-TH",{timeZone:"Asia/Bangkok",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+
+/* ---------- DB load / save ---------- */
+let DB = null;
+function loadDB(){
+  const raw = localStorage.getItem(DB_KEY);
+  if(raw){ try{ DB = JSON.parse(raw); }catch(e){ DB=null; } }
+  if(!DB) DB = seedDB();
+  saveDB();
+}
+function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
+
+/* ---------- Seed demo data: 2 อาคาร ---------- */
+function seedDB(){
+  const db = {warehouses:[],locations:[],products:[],users:[],stock:[],txns:[]};
+  // users
+  db.users.push({id:uid("u"),username:"admin",password:"1234",name:"ผู้ดูแลระบบ",role:"admin"});
+  db.users.push({id:uid("u"),username:"staff",password:"1234",name:"สมชาย (พนักงานคลัง)",role:"staff"});
+  // warehouses (2 อาคาร)
+  const w1={id:uid("w"),code:"WH-A",name:"อาคาร A (คลังหลัก)"};
+  const w2={id:uid("w"),code:"WH-B",name:"อาคาร B (คลังสำรอง)"};
+  db.warehouses.push(w1,w2);
+  // locations: Zone/Bay -> code + barcode
+  const zones = {[w1.id]:["A","B"], [w2.id]:["C"]};
+  for(const w of db.warehouses){
+    for(const z of zones[w.id]){
+      for(let bay=1;bay<=2;bay++){
+        for(let lv=1;lv<=2;lv++){
+          const code = `${w.code}-${z}${bay}-${lv}`;
+          db.locations.push({
+            id:uid("loc"), warehouseId:w.id, zone:z, bay:String(bay),
+            code, barcode:"LOC"+code.replace(/-/g,""), capacity:500
+          });
+        }
+      }
+    }
+  }
+  // products
+  const prods=[
+    ["P001","น้ำดื่ม 600ml (แพ็ค12)","8850001000017","แพ็ค","เครื่องดื่ม"],
+    ["P002","ข้าวสารหอมมะลิ 5kg","8850002000024","ถุง","อาหารแห้ง"],
+    ["P003","กระดาษ A4 80แกรม","8850003000031","รีม","เครื่องเขียน"],
+    ["P004","สบู่ก้อน 100g","8850004000048","ก้อน","ของใช้"],
+    ["P005","ปลากระป๋อง 155g","8850005000055","กระป๋อง","อาหารแห้ง"],
+    ["P006","ผงซักฟอก 900g","8850006000062","ถุง","ของใช้"],
+  ];
+  for(const [code,name,barcode,unit,cat] of prods)
+    db.products.push({id:uid("p"),code,name,barcode,unit,category:cat});
+  // initial stock (some)
+  const loc0 = db.locations[0], loc1=db.locations[1], loc6=db.locations[6];
+  const p=(i)=>db.products[i].id;
+  const addS=(pid,lid,q)=>db.stock.push({productId:pid,locationId:lid,qty:q});
+  addS(p(0),loc0.id,120); addS(p(1),loc0.id,60); addS(p(2),loc1.id,200);
+  addS(p(3),loc1.id,45); addS(p(4),loc6.id,300); addS(p(5),loc6.id,8);
+  return db;
+}
+
+/* ---------- lookups ---------- */
+const byId=(arr,id)=>arr.find(x=>x.id===id);
+function findProduct(scan){
+  scan=scan.trim();
+  return DB.products.find(p=>p.barcode===scan||p.code.toLowerCase()===scan.toLowerCase());
+}
+function findLocation(scan){
+  scan=scan.trim();
+  return DB.locations.find(l=>l.barcode===scan||l.code.toLowerCase()===scan.toLowerCase());
+}
+function getStock(pid,lid){
+  const s=DB.stock.find(x=>x.productId===pid&&x.locationId===lid);
+  return s?s.qty:0;
+}
+function whName(id){ const w=byId(DB.warehouses,id); return w?w.name:"-"; }
+function locLabel(id){ const l=byId(DB.locations,id); return l?l.code:"-"; }
+function prodLabel(id){ const p=byId(DB.products,id); return p?`${p.code} · ${p.name}`:"-"; }
+
+/* =========================================================
+   ATOMIC transaction engine
+   ทุก operation ผ่านตรงนี้ — ตรวจสอบก่อน แล้ว commit ทีเดียว
+   ========================================================= */
+function applyMovement({type, productId, fromLocationId, toLocationId, qty, reason, note}){
+  qty = Number(qty);
+  if(!Number.isFinite(qty) || qty<=0) throw new Error("จำนวนต้องมากกว่า 0");
+  // snapshot สำหรับ rollback
+  const snapStock = JSON.stringify(DB.stock);
+  try{
+    if(type==="in"){
+      _addStock(productId, toLocationId, qty);
+    }else if(type==="out"){
+      _removeStock(productId, fromLocationId, qty); // ตรวจติดลบข้างใน
+    }else if(type==="move"){
+      // ตรวจต้นทางก่อน — ถ้าไม่พอจะ throw ก่อนแตะปลายทาง
+      _removeStock(productId, fromLocationId, qty);
+      _addStock(productId, toLocationId, qty);
+    }else throw new Error("ประเภทไม่ถูกต้อง");
+
+    const txn={
+      id:uid("t"), type, productId,
+      fromLocationId:fromLocationId||null, toLocationId:toLocationId||null,
+      qty, reason:reason||null, note:note||null,
+      userId:SESSION.userId, userName:SESSION.name,
+      ts:new Date().toISOString()
+    };
+    DB.txns.unshift(txn);
+    saveDB();
+    return txn;
+  }catch(err){
+    DB.stock = JSON.parse(snapStock); // rollback
+    throw err;
+  }
+}
+function _addStock(pid,lid,qty){
+  if(!pid||!lid) throw new Error("ข้อมูลไม่ครบ");
+  let s=DB.stock.find(x=>x.productId===pid&&x.locationId===lid);
+  if(!s){ s={productId:pid,locationId:lid,qty:0}; DB.stock.push(s); }
+  // capacity check
+  const loc=byId(DB.locations,lid);
+  if(loc && loc.capacity){
+    const totalInLoc = DB.stock.filter(x=>x.locationId===lid).reduce((a,b)=>a+b.qty,0);
+    if(totalInLoc+qty>loc.capacity)
+      throw new Error(`เกินความจุ ${loc.code} (จุได้ ${loc.capacity}, มีอยู่ ${totalInLoc})`);
+  }
+  s.qty+=qty;
+}
+function _removeStock(pid,lid,qty){
+  if(!pid||!lid) throw new Error("ข้อมูลไม่ครบ");
+  const s=DB.stock.find(x=>x.productId===pid&&x.locationId===lid);
+  const cur=s?s.qty:0;
+  if(cur<qty) throw new Error(`สต็อกไม่พอ! คงเหลือ ${cur} ที่ ${locLabel(lid)} (ขอตัด ${qty})`);
+  s.qty-=qty;
+  if(s.qty===0) DB.stock = DB.stock.filter(x=>!(x.productId===pid&&x.locationId===lid));
+}
+
+/* =========================================================
+   AUTH
+   ========================================================= */
+let SESSION=null;
+function doLogin(e){
+  e.preventDefault();
+  const u=document.getElementById("lg-user").value.trim().toLowerCase();
+  const p=document.getElementById("lg-pass").value.trim();
+  const user=DB.users.find(x=>x.username.toLowerCase()===u&&x.password===p);
+  if(!user){ beep(false); alert("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"); return; }
+  SESSION={userId:user.id,name:user.name,role:user.role,username:user.username};
+  localStorage.setItem(SESSION_KEY,JSON.stringify(SESSION));
+  startApp();
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);
+  SESSION=null;
+  document.getElementById("app").style.display="none";
+  document.getElementById("login").style.display="flex";
+  document.getElementById("lg-pass").value="";
+}
+function restoreSession(){
+  const raw=localStorage.getItem(SESSION_KEY);
+  if(raw){ try{ SESSION=JSON.parse(raw); startApp(); return true; }catch(e){} }
+  return false;
+}
+
+/* =========================================================
+   NAV / ROUTER
+   ========================================================= */
+const TABS=[
+  {id:"dashboard",label:"📊 หน้าหลัก",roles:["admin","staff"]},
+  {id:"scan",label:"📷 สแกน",roles:["admin","staff"]},
+  {id:"stock",label:"📦 สต็อกคงเหลือ",roles:["admin","staff"]},
+  {id:"log",label:"📜 ประวัติเคลื่อนไหว",roles:["admin","staff"]},
+  {id:"transfer",label:"🔁 รายงานย้ายคลัง",roles:["admin","staff"]},
+  {id:"products",label:"🏷️ สินค้า",roles:["admin"]},
+  {id:"warehouses",label:"🏢 คลัง",roles:["admin"]},
+  {id:"locations",label:"📍 ตำแหน่งจัดเก็บ",roles:["admin"]},
+  {id:"users",label:"👤 ผู้ใช้งาน",roles:["admin"]},
+];
+let CURRENT="dashboard";
+function startApp(){
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
+  document.getElementById("me-name").textContent=SESSION.name;
+  const rb=document.getElementById("me-role");
+  rb.textContent=SESSION.role==="admin"?"ผู้ดูแลระบบ":"พนักงานคลัง";
+  rb.className="role-badge"+(SESSION.role==="staff"?" staff":"");
+  buildTabs();
+  go("dashboard");
+}
+function buildTabs(){
+  const nav=document.getElementById("tabs");
+  nav.innerHTML="";
+  TABS.filter(t=>t.roles.includes(SESSION.role)).forEach(t=>{
+    const b=document.createElement("button");
+    b.textContent=t.label; b.dataset.id=t.id;
+    b.onclick=()=>go(t.id);
+    nav.appendChild(b);
+  });
+}
+function go(id){
+  CURRENT=id;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.id===id));
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("v-"+id).classList.add("active");
+  stopCamera();
+  RENDER[id]&&RENDER[id]();
+  window.scrollTo(0,0);
+}
+
+/* =========================================================
+   FEEDBACK: เสียง + สี
+   ========================================================= */
+let audioCtx=null;
+function beep(success){
+  try{
+    audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+    if(success){
+      tone(880,0,.08); tone(1320,.09,.1);
+    }else{
+      tone(220,0,.18,"square");
+    }
+  }catch(e){}
+}
+function tone(freq,delay,dur,type="sine"){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+  o.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime+delay;
+  g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(.3,t+.01);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.start(t); o.stop(t+dur+.02);
+}
+let flashTimer=null;
+function flash(ok,title,detail){
+  beep(ok);
+  if(navigator.vibrate) navigator.vibrate(ok?40:[60,40,60]);
+  const f=document.getElementById("flash");
+  f.className=ok?"ok":"err";
+  f.innerHTML=`<div class="big">${ok?"✓":"✗"} ${title}</div>`+(detail?`<div class="det">${detail}</div>`:"");
+  clearTimeout(flashTimer);
+  flashTimer=setTimeout(()=>{f.style.display="none";f.className="";},ok?1600:2600);
+}
+
+/* =========================================================
+   RENDER MAP
+   ========================================================= */
+const RENDER={};
+
+/* ---------- Dashboard ---------- */
+RENDER.dashboard=function(){
+  const totalQty=DB.stock.reduce((a,b)=>a+b.qty,0);
+  const today=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"});
+  const todayTxns=DB.txns.filter(t=>new Date(t.ts).toLocaleDateString("en-CA",{timeZone:"Asia/Bangkok"})===today);
+  // low stock: product total < 20
+  const prodTotals={};
+  DB.stock.forEach(s=>prodTotals[s.productId]=(prodTotals[s.productId]||0)+s.qty);
+  const low=DB.products.filter(p=>(prodTotals[p.id]||0)<20);
+  const el=document.getElementById("v-dashboard");
+  el.innerHTML=`
+    <h2 class="page">ภาพรวมคลัง</h2>
+    <div class="page-sub">ข้อมูล ณ ${fmtBKK(new Date().toISOString())} น. (เวลาไทย)</div>
+    <div class="cards">
+      <div class="stat blue"><div class="n">${DB.warehouses.length}</div><div class="l">คลัง/อาคาร</div></div>
+      <div class="stat cyan"><div class="n">${DB.locations.length}</div><div class="l">ตำแหน่งจัดเก็บ</div></div>
+      <div class="stat green"><div class="n">${DB.products.length}</div><div class="l">รายการสินค้า</div></div>
+      <div class="stat blue"><div class="n">${totalQty.toLocaleString()}</div><div class="l">จำนวนรวมทั้งหมด</div></div>
+      <div class="stat green"><div class="n">${todayTxns.length}</div><div class="l">ธุรกรรมวันนี้</div></div>
+      <div class="stat amber"><div class="n">${low.length}</div><div class="l">สินค้าใกล้หมด</div></div>
+    </div>
+    <div class="panel">
+      <h3>⚡ ทางลัด</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn ok" onclick="go('scan');setTimeout(()=>setMode('in'),50)">➕ รับเข้า</button>
+        <button class="btn err" onclick="go('scan');setTimeout(()=>setMode('out'),50)">➖ ตัดออก</button>
+        <button class="btn" style="background:var(--accent)" onclick="go('scan');setTimeout(()=>setMode('move'),50)">🔁 ย้ายคลัง</button>
+      </div>
+    </div>
+    ${low.length?`<div class="panel"><h3>⚠️ สินค้าใกล้หมด (รวม &lt; 20)</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>รหัส</th><th>สินค้า</th><th class="num">คงเหลือรวม</th></tr></thead><tbody>
+      ${low.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td class="num lowstock">${(prodTotals[p.id]||0)} ${p.unit}</td></tr>`).join("")}
+      </tbody></table></div></div>`:""}
+    <div class="panel"><h3>🕑 ธุรกรรมล่าสุด</h3>
+      ${DB.txns.length?`<div class="tbl-wrap"><table><thead><tr><th>เวลา</th><th>ประเภท</th><th>สินค้า</th><th class="num">จำนวน</th><th>โดย</th></tr></thead><tbody>
+      ${DB.txns.slice(0,8).map(rowTxn).join("")}
+      </tbody></table></div>`:`<div class="empty">ยังไม่มีธุรกรรม</div>`}
+    </div>`;
+};
+function rowTxn(t){
+  const tp={in:["รับเข้า","in"],out:["ตัดออก","out"],move:["ย้าย","move"]}[t.type];
+  const where=t.type==="move"?`${locLabel(t.fromLocationId)} → ${locLabel(t.toLocationId)}`
+    :t.type==="in"?locLabel(t.toLocationId):locLabel(t.fromLocationId);
+  return `<tr><td class="muted">${fmtBKKshort(t.ts)}</td><td><span class="pill ${tp[1]}">${tp[0]}</span></td>
+    <td>${prodLabel(t.productId)}<br><span class="muted">${where}</span></td>
+    <td class="num">${t.qty}</td><td class="muted">${t.userName||"-"}</td></tr>`;
+}
+
+/* =========================================================
+   SCAN MODULE — 3 โหมด (in / out / move)
+   auto-focus, detect Enter จาก scanner, กล้องมือถือ, atomic
+   ========================================================= */
+let SCAN={mode:"in", product:null, fromLoc:null, toLoc:null, camTarget:null};
+
+RENDER.scan=function(){
+  const el=document.getElementById("v-scan");
+  el.innerHTML=`
+    <h2 class="page">สแกนบาร์โค้ด</h2>
+    <div class="page-sub">เครื่องยิงบาร์โค้ด (USB/Bluetooth) ทำงานทันที · หรือกดใช้กล้องมือถือ · กด Enter เพื่อยืนยันอัตโนมัติ</div>
+    <div class="modes">
+      <button class="mode-btn in" data-m="in" onclick="setMode('in')"><span class="ic">➕</span>ตัดเข้า<small>รับสินค้า</small></button>
+      <button class="mode-btn out" data-m="out" onclick="setMode('out')"><span class="ic">➖</span>ตัดออก<small>เบิก/ขาย/เสีย</small></button>
+      <button class="mode-btn move" data-m="move" onclick="setMode('move')"><span class="ic">🔁</span>ย้ายคลัง<small>ข้ามอาคารได้</small></button>
+    </div>
+    <div class="panel" id="scan-panel"></div>`;
+  setMode(SCAN.mode);
+};
+
+function setMode(m){
+  SCAN={mode:m, product:null, fromLoc:null, toLoc:null, camTarget:null};
+  document.querySelectorAll(".mode-btn").forEach(b=>b.classList.toggle("active",b.dataset.m===m));
+  const titles={in:"ตัดเข้า (รับสินค้า)",out:"ตัดออก (เบิก/ขาย/เสีย)",move:"ย้ายคลัง"};
+  const p=document.getElementById("scan-panel");
+  // build steps based on mode
+  let stepsHtml=`<h3>${titles[m]}</h3>`;
+  stepsHtml+=stepBlock(1,"prod","สแกน/พิมพ์ บาร์โค้ดสินค้า หรือรหัสสินค้า");
+  if(m==="in"){
+    stepsHtml+=stepBlock(2,"toloc","สแกน Location ปลายทาง (ที่จะเก็บ)");
+  }else if(m==="out"){
+    stepsHtml+=stepBlock(2,"fromloc","สแกน Location ต้นทาง (ที่จะตัด)");
+  }else{
+    stepsHtml+=stepBlock(2,"fromloc","สแกน Location ต้นทาง");
+    stepsHtml+=stepBlock(3,"toloc","สแกน Location ปลายทาง");
+  }
+  const lastNo = m==="move"?4:3;
+  // reason for out
+  let reasonHtml="";
+  if(m==="out"){
+    reasonHtml=`<div style="margin:6px 0 10px"><label class="muted" style="font-size:13px">เหตุผล</label>
+      <select id="sc-reason" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);margin-top:5px">
+        <option value="ขาย">ขาย</option><option value="เบิกใช้">เบิกใช้</option><option value="เสีย/ชำรุด">เสีย/ชำรุด</option><option value="ปรับปรุงสต็อก">ปรับปรุงสต็อก</option>
+      </select></div>`;
+  }
+  // PO ref for in
+  let refHtml="";
+  if(m==="in"){
+    refHtml=`<div style="margin:6px 0 10px"><label class="muted" style="font-size:13px">เลขที่ PO / ใบรับสินค้า (ถ้ามี)</label>
+      <input id="sc-ref" placeholder="เช่น PO-2026-001" style="width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);margin-top:5px"></div>`;
+  }
+  stepsHtml+=`<div class="scan-step" id="step-qty">
+      <div class="step-head"><span class="step-no">${lastNo}</span><label>ใส่จำนวน แล้วยืนยัน</label></div>
+      ${refHtml}${reasonHtml}
+      <div class="scan-input">
+        <input id="sc-qty" class="qty-input" type="number" min="1" inputmode="numeric" placeholder="จำนวน" onkeydown="if(event.key==='Enter'){event.preventDefault();submitScan()}">
+        <button class="btn ${m==='in'?'ok':m==='out'?'err':''}" style="${m==='move'?'background:var(--accent)':''}" onclick="submitScan()">ยืนยัน</button>
+      </div>
+    </div>`;
+  p.innerHTML=stepsHtml;
+  refreshSteps();
+  focusFirst();
+}
+
+function stepBlock(no,key,label){
+  return `<div class="scan-step" id="step-${key}">
+    <div class="step-head"><span class="step-no">${no}</span><label>${label}</label></div>
+    <div class="scan-input">
+      <input id="in-${key}" autocomplete="off" autocapitalize="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();resolveScan('${key}')}"
+        placeholder="ยิงบาร์โค้ด / พิมพ์แล้วกด Enter">
+      <button class="icon-btn" title="ใช้กล้อง" onclick="openCamera('${key}')">📷</button>
+    </div>
+    <div class="resolved hidden" id="res-${key}"></div>
+  </div>`;
+}
+
+function resolveScan(key){
+  const inp=document.getElementById("in-"+key);
+  const val=inp.value.trim();
+  if(!val) return;
+  const res=document.getElementById("res-"+key);
+  if(key==="prod"){
+    const p=findProduct(val);
+    if(!p){
+      showRes(res,false,`ไม่พบสินค้า: ${val}`);
+      LAST_UNKNOWN={code:val,key:key};
+      const box=document.createElement("div"); box.style.marginTop="8px";
+      box.innerHTML='<button class="btn ok sm" type="button" onclick="quickAddProduct()">➕ เพิ่มสินค้านี้เข้าระบบ</button>';
+      res.appendChild(box);
+      flash(false,"ไม่พบสินค้า","กดปุ่ม ➕ เพื่อเพิ่มสินค้านี้");
+      inp.select(); return;
+    }
+    SCAN.product=p;
+    showRes(res,true,`${p.code} · ${p.name} (หน่วย: ${p.unit})`);
+    beep(true);
+  }else{ // fromloc / toloc
+    const l=findLocation(val);
+    if(!l){ showRes(res,false,`ไม่พบตำแหน่ง: ${val}`); flash(false,"ไม่พบ Location",val); inp.select(); return; }
+    if(key==="fromloc"){
+      SCAN.fromLoc=l;
+      const stk=SCAN.product?getStock(SCAN.product.id,l.id):"-";
+      showRes(res,true,`${l.code} · ${whName(l.warehouseId)} | คงเหลือสินค้านี้: ${stk}`);
+    }else{
+      SCAN.toLoc=l;
+      showRes(res,true,`${l.code} · ${whName(l.warehouseId)}`);
+    }
+    beep(true);
+  }
+  refreshSteps();
+  advanceFocus(key);
+}
+function showRes(el,ok,txt){
+  el.className="resolved "+(ok?"ok":"err");
+  el.textContent=(ok?"✓ ":"✗ ")+txt;
+}
+function refreshSteps(){
+  // enable steps progressively
+  const prodOK=!!SCAN.product;
+  enableStep("prod",true,prodOK);
+  if(SCAN.mode==="in"){
+    enableStep("toloc",prodOK,!!SCAN.toLoc);
+    setQtyStep(prodOK && !!SCAN.toLoc);
+  }else if(SCAN.mode==="out"){
+    enableStep("fromloc",prodOK,!!SCAN.fromLoc);
+    setQtyStep(prodOK && !!SCAN.fromLoc);
+  }else{
+    enableStep("fromloc",prodOK,!!SCAN.fromLoc);
+    enableStep("toloc",prodOK&&!!SCAN.fromLoc,!!SCAN.toLoc);
+    setQtyStep(prodOK && !!SCAN.fromLoc && !!SCAN.toLoc);
+  }
+}
+function enableStep(key,on,done){
+  const s=document.getElementById("step-"+key); if(!s)return;
+  s.classList.toggle("on",on); s.classList.toggle("done",!!done);
+}
+function setQtyStep(on){
+  const s=document.getElementById("step-qty"); if(!s)return;
+  s.classList.toggle("on",on);
+}
+function advanceFocus(key){
+  setTimeout(()=>{
+    if(key==="prod"){
+      const next = SCAN.mode==="in" ? "in-toloc" : "in-fromloc";
+      document.getElementById(next)?.focus();
+    }else if(key==="fromloc" && SCAN.mode==="move"){
+      document.getElementById("in-toloc")?.focus();
+    }else{
+      document.getElementById("sc-qty")?.focus();
+    }
+  },60);
+}
+function focusFirst(){ setTimeout(()=>document.getElementById("in-prod")?.focus(),80); }
+
+/* ---------- เพิ่มสินค้าทันทีจากหน้าสแกน ---------- */
+let LAST_UNKNOWN=null;
+function suggestCode(){
+  let max=0;
+  DB.products.forEach(p=>{const m=/^P0*(\d+)$/i.exec(p.code); if(m) max=Math.max(max,parseInt(m[1],10));});
+  return "P"+String(max+1).padStart(3,"0");
+}
+function quickAddProduct(){
+  if(!LAST_UNKNOWN) return;
+  const scanned=LAST_UNKNOWN.code, k=LAST_UNKNOWN.key;
+  // ถ้าเลขที่สแกนเป็นบาร์โค้ด (มีแต่ตัวเลข) เติมในช่องบาร์โค้ด ไม่งั้นเดาเป็นรหัสสินค้า
+  const looksBarcode=/^\d{6,}$/.test(scanned);
+  openModal("➕ เพิ่มสินค้าใหม่ (จากที่สแกน)",`
+    <div class="field"><label>บาร์โค้ด*</label><input id="qa-barcode" value="${looksBarcode?scanned:''}" placeholder="เลข EAN-13"></div>
+    <div class="field"><label>ชื่อสินค้า*</label><input id="qa-name" placeholder="เช่น น้ำดื่ม 600ml (แพ็ค12)"></div>
+    <div class="fgrid">
+      <div class="field"><label>รหัสสินค้า*</label><input id="qa-code" value="${looksBarcode?suggestCode():scanned}"></div>
+      <div class="field"><label>หน่วยนับ*</label><input id="qa-unit" value="ชิ้น"></div>
+    </div>
+    <div class="field"><label>หมวดหมู่</label><input id="qa-cat" placeholder="(ไม่บังคับ)"></div>`,
+    ()=>{
+      const barcode=val("qa-barcode"),name=val("qa-name"),code=val("qa-code"),unit=val("qa-unit"),cat=val("qa-cat");
+      if(!barcode||!name||!code||!unit){ alert("กรอกบาร์โค้ด/ชื่อ/รหัส/หน่วย ให้ครบ"); return false; }
+      if(DB.products.some(x=>x.code===code||x.barcode===barcode)){ alert("รหัสหรือบาร์โค้ดซ้ำกับสินค้าเดิม"); return false; }
+      const np={id:uid("p"),code,name,barcode,unit,category:cat};
+      DB.products.push(np); saveDB();
+      // ตั้งเป็นสินค้าที่กำลังสแกน แล้วเดินหน้า flow ต่อ
+      SCAN.product=np; LAST_UNKNOWN=null;
+      const inp=document.getElementById("in-"+k); if(inp) inp.value=barcode;
+      const res=document.getElementById("res-"+k);
+      if(res){ res.innerHTML=""; showRes(res,true,`${np.code} · ${np.name} (หน่วย: ${np.unit})`); }
+      refreshSteps(); advanceFocus(k);
+      flash(true,"เพิ่มสินค้าแล้ว",`${np.code} · ${np.name}`);
+      return true;
+    });
+  setTimeout(()=>document.getElementById("qa-name")?.focus(),100);
+}
+
+function submitScan(){
+  const qty=Number(document.getElementById("sc-qty").value);
+  try{
+    if(!SCAN.product) throw new Error("ยังไม่ได้สแกนสินค้า");
+    if(!qty||qty<=0) throw new Error("กรุณาใส่จำนวนที่ถูกต้อง");
+    let payload={type:SCAN.mode,productId:SCAN.product.id,qty};
+    if(SCAN.mode==="in"){
+      if(!SCAN.toLoc) throw new Error("ยังไม่ได้สแกน Location ปลายทาง");
+      payload.toLocationId=SCAN.toLoc.id;
+      payload.note=document.getElementById("sc-ref")?.value.trim()||null;
+      payload.reason="รับเข้า";
+    }else if(SCAN.mode==="out"){
+      if(!SCAN.fromLoc) throw new Error("ยังไม่ได้สแกน Location ต้นทาง");
+      payload.fromLocationId=SCAN.fromLoc.id;
+      payload.reason=document.getElementById("sc-reason")?.value||"เบิกใช้";
+    }else{
+      if(!SCAN.fromLoc||!SCAN.toLoc) throw new Error("ยังไม่ได้สแกน Location ครบ");
+      if(SCAN.fromLoc.id===SCAN.toLoc.id) throw new Error("ต้นทางและปลายทางต้องต่างกัน");
+      payload.fromLocationId=SCAN.fromLoc.id;
+      payload.toLocationId=SCAN.toLoc.id;
+      payload.reason="ย้ายคลัง";
+    }
+    applyMovement(payload);
+    const detail={in:`+${qty} ที่ ${SCAN.toLoc.code}`,out:`-${qty} จาก ${SCAN.fromLoc.code}`,
+      move:`${SCAN.fromLoc.code} → ${SCAN.toLoc.code} (${qty})`}[SCAN.mode];
+    flash(true,"บันทึกสำเร็จ",`${SCAN.product.code} · ${detail}`);
+    setMode(SCAN.mode); // reset for next scan
+  }catch(err){
+    flash(false,"ผิดพลาด",err.message);
+  }
+}
+
+/* ---------- Camera scanning ---------- */
+let html5qr=null, camKey=null;
+function onScan(key,txt){
+  const inp=document.getElementById("in-"+key);
+  if(inp){ inp.value=txt; }
+  stopCamera();
+  resolveScan(key);
+}
+function openCamera(key){
+  SCAN.camTarget=key; camKey=key;
+  let wrap=document.getElementById("cam-wrap");
+  if(wrap) wrap.remove();
+  wrap=document.createElement("div"); wrap.id="cam-wrap";
+  wrap.innerHTML=`<div id="reader"></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">วางบาร์โค้ดให้เต็มกรอบ เส้นขนานแนวนอน ถือนิ่งให้โฟกัสคมชัด · ถ้ายังไม่ติดให้พิมพ์เลขบาร์โค้ดในช่องแล้วกด Enter ได้</div>`;
+  document.getElementById("step-"+key).appendChild(wrap);
+  if(typeof Html5Qrcode==="undefined"){ alert("ไลบรารีกล้องยังโหลดไม่เสร็จ (ต้องมีอินเทอร์เน็ต)"); return; }
+  if(location.protocol==="file:"){
+    alert("กล้องใช้ไม่ได้เมื่อเปิดไฟล์แบบ file:// (เปิดไฟล์ตรงจากเครื่อง)\n\nให้ใช้วิธีใดวิธีหนึ่ง:\n• เปิดผ่านลิงก์ https (GitHub Pages) บนมือถือ\n• ใช้เครื่องยิงบาร์โค้ด USB หรือพิมพ์เลขในช่องแล้วกด Enter");
+    const w=document.getElementById("cam-wrap"); if(w) w.remove();
+    return;
+  }
+  let fmts;
+  try{
+    const F=Html5QrcodeSupportedFormats;
+    fmts=[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.CODABAR,F.QR_CODE];
+  }catch(e){ fmts=undefined; }
+  const qrbox=(vw,vh)=>({width:Math.floor(Math.min(vw*0.95,400)),height:Math.floor(Math.min(vh*0.6,200))});
+  let locked=false;
+  const cb=(txt)=>{ if(locked) return; locked=true; onScan(key,txt); };
+  startScanner(fmts,qrbox,cb,true);
+}
+function startScanner(fmts,qrbox,cb,hiRes){
+  // ใช้ตัวถอดรหัส ZXing (เข้ากันได้กับเกือบทุกเบราว์เซอร์ ถอดรหัส EAN-13 ได้นิ่งกว่า native detector)
+  html5qr=new Html5Qrcode("reader",{formatsToSupport:fmts,experimentalFeatures:{useBarCodeDetectorIfSupported:false},verbose:false});
+  const cam=hiRes?{facingMode:"environment",width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:"continuous"}]}:{facingMode:"environment"};
+  const cfg=hiRes?{fps:20,qrbox,aspectRatio:1.7778}:{fps:15,qrbox};
+  html5qr.start(cam,cfg,cb,()=>{}).catch((err)=>{
+    // ทำความสะอาด instance เดิม (settled แล้ว) ก่อนสร้างใหม่ กัน error "already under transition"
+    const old=html5qr; html5qr=null;
+    try{ old&&old.clear(); }catch(e){}
+    if(hiRes){ startScanner(fmts,qrbox,cb,false); }
+    else { alert("เปิดกล้องไม่ได้: "+err); }
+  });
+}
+function stopCamera(){
+  const q=html5qr; html5qr=null;
+  if(q){
+    let st=null; try{ st=q.getState(); }catch(e){}
+    if(st===2||st===3){ // 2=SCANNING, 3=PAUSED — หยุดเฉพาะตอนทำงานจริง กัน transition error
+      q.stop().then(()=>{try{q.clear();}catch(e){}}).catch(()=>{});
+    }else{ try{ q.clear(); }catch(e){} }
+  }
+  const w=document.getElementById("cam-wrap"); if(w) w.remove();
+  const r=document.getElementById("reader"); if(r) r.remove();
+}
+
+/* =========================================================
+   STOCK report — แยกตามสินค้า/คลัง/Location + filter + export
+   ========================================================= */
+RENDER.stock=function(){
+  const el=document.getElementById("v-stock");
+  el.innerHTML=`
+    <h2 class="page">สต็อกคงเหลือ</h2>
+    <div class="page-sub">แยกตามสินค้า · คลัง · ตำแหน่งจัดเก็บ</div>
+    <div class="toolbar">
+      <input id="st-q" class="grow" placeholder="🔎 ค้นหา สินค้า/รหัส/ตำแหน่ง" oninput="renderStockTable()">
+      <select id="st-wh" onchange="renderStockTable()"><option value="">ทุกคลัง</option>${DB.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join("")}</select>
+      <button class="btn gray sm" onclick="exportStock('csv')">⬇ CSV</button>
+      <button class="btn gray sm" onclick="exportStock('xlsx')">⬇ Excel</button>
+    </div>
+    <div id="stock-table"></div>`;
+  renderStockTable();
+};
+function stockRows(){
+  const q=(document.getElementById("st-q")?.value||"").toLowerCase().trim();
+  const wh=document.getElementById("st-wh")?.value||"";
+  let rows=DB.stock.map(s=>{
+    const p=byId(DB.products,s.productId), l=byId(DB.locations,s.locationId);
+    if(!p||!l) return null;
+    return {p,l,qty:s.qty,wh:whName(l.warehouseId),whId:l.warehouseId};
+  }).filter(Boolean);
+  if(wh) rows=rows.filter(r=>r.whId===wh);
+  if(q) rows=rows.filter(r=>(r.p.code+r.p.name+r.p.barcode+r.l.code+r.wh).toLowerCase().includes(q));
+  rows.sort((a,b)=>a.p.code.localeCompare(b.p.code)||a.l.code.localeCompare(b.l.code));
+  return rows;
+}
+function renderStockTable(){
+  const rows=stockRows();
+  const cont=document.getElementById("stock-table");
+  if(!rows.length){ cont.innerHTML=`<div class="empty">ไม่พบข้อมูลสต็อก</div>`; return; }
+  const total=rows.reduce((a,b)=>a+b.qty,0);
+  cont.innerHTML=`<div class="tbl-wrap"><table><thead><tr>
+    <th>รหัส</th><th>สินค้า</th><th>คลัง</th><th>ตำแหน่ง</th><th class="num">คงเหลือ</th><th>หน่วย</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${r.p.code}</td><td>${r.p.name}</td><td>${r.wh}</td><td>${r.l.code}</td>
+      <td class="num ${r.qty<20?'lowstock':''}">${r.qty.toLocaleString()}</td><td class="muted">${r.p.unit}</td></tr>`).join("")}
+    </tbody><tfoot><tr><th colspan="4">รวม (${rows.length} รายการ)</th><th class="num">${total.toLocaleString()}</th><th></th></tr></tfoot></table></div>`;
+}
+
+/* =========================================================
+   TRANSACTION LOG — ใคร ทำอะไร เมื่อไหร่ ที่ไหน
+   ========================================================= */
+RENDER.log=function(){
+  const el=document.getElementById("v-log");
+  el.innerHTML=`
+    <h2 class="page">ประวัติการเคลื่อนไหว</h2>
+    <div class="page-sub">บันทึกทุกธุรกรรม: ใคร · ทำอะไร · เมื่อไหร่ · ที่ไหน (เวลาไทย)</div>
+    <div class="toolbar">
+      <input id="lg-q" class="grow" placeholder="🔎 ค้นหา สินค้า/ผู้ใช้/ตำแหน่ง" oninput="renderLogTable()">
+      <select id="lg-type" onchange="renderLogTable()">
+        <option value="">ทุกประเภท</option><option value="in">รับเข้า</option><option value="out">ตัดออก</option><option value="move">ย้ายคลัง</option>
+      </select>
+      <button class="btn gray sm" onclick="exportLog('csv')">⬇ CSV</button>
+      <button class="btn gray sm" onclick="exportLog('xlsx')">⬇ Excel</button>
+    </div>
+    <div id="log-table"></div>`;
+  renderLogTable();
+};
+function logRows(){
+  const q=(document.getElementById("lg-q")?.value||"").toLowerCase().trim();
+  const tp=document.getElementById("lg-type")?.value||"";
+  let rows=DB.txns.slice();
+  if(tp) rows=rows.filter(t=>t.type===tp);
+  if(q) rows=rows.filter(t=>(prodLabel(t.productId)+(t.userName||"")+locLabel(t.fromLocationId)+locLabel(t.toLocationId)+(t.reason||"")).toLowerCase().includes(q));
+  return rows;
+}
+function renderLogTable(){
+  const rows=logRows();
+  const cont=document.getElementById("log-table");
+  if(!rows.length){ cont.innerHTML=`<div class="empty">ไม่มีรายการ</div>`; return; }
+  const tpMap={in:["รับเข้า","in"],out:["ตัดออก","out"],move:["ย้าย","move"]};
+  cont.innerHTML=`<div class="tbl-wrap"><table><thead><tr>
+    <th>เวลา (ไทย)</th><th>ประเภท</th><th>สินค้า</th><th>จาก</th><th>ไป</th><th class="num">จำนวน</th><th>เหตุผล</th><th>ผู้ทำ</th></tr></thead><tbody>
+    ${rows.map(t=>{const m=tpMap[t.type];return `<tr>
+      <td class="muted">${fmtBKK(t.ts)}</td>
+      <td><span class="pill ${m[1]}">${m[0]}</span></td>
+      <td>${prodLabel(t.productId)}</td>
+      <td>${t.fromLocationId?locLabel(t.fromLocationId):'<span class="muted">-</span>'}</td>
+      <td>${t.toLocationId?locLabel(t.toLocationId):'<span class="muted">-</span>'}</td>
+      <td class="num">${t.qty}</td>
+      <td class="muted">${t.reason||"-"}${t.note?" · "+t.note:""}</td>
+      <td class="muted">${t.userName||"-"}</td></tr>`;}).join("")}
+    </tbody></table></div>`;
+}
+
+/* =========================================================
+   TRANSFER report — เฉพาะรายการย้ายคลัง
+   ========================================================= */
+RENDER.transfer=function(){
+  const el=document.getElementById("v-transfer");
+  const moves=DB.txns.filter(t=>t.type==="move");
+  el.innerHTML=`
+    <h2 class="page">รายงานการย้ายคลัง</h2>
+    <div class="page-sub">รายการโยกย้ายสินค้าระหว่างตำแหน่ง/อาคาร</div>
+    <div class="toolbar">
+      <button class="btn gray sm" onclick="exportTransfer('csv')">⬇ CSV</button>
+      <button class="btn gray sm" onclick="exportTransfer('xlsx')">⬇ Excel</button>
+    </div>
+    ${moves.length?`<div class="tbl-wrap"><table><thead><tr>
+      <th>เวลา (ไทย)</th><th>สินค้า</th><th>จากคลัง</th><th>ตำแหน่งต้นทาง</th><th>ไปคลัง</th><th>ตำแหน่งปลายทาง</th><th class="num">จำนวน</th><th>ผู้ทำ</th></tr></thead><tbody>
+      ${moves.map(t=>{const lf=byId(DB.locations,t.fromLocationId),lt=byId(DB.locations,t.toLocationId);
+        const cross=lf&&lt&&lf.warehouseId!==lt.warehouseId;
+        return `<tr><td class="muted">${fmtBKK(t.ts)}</td><td>${prodLabel(t.productId)}</td>
+        <td>${lf?whName(lf.warehouseId):"-"} ${cross?'<span class="pill move">ข้ามคลัง</span>':''}</td>
+        <td>${locLabel(t.fromLocationId)}</td><td>${lt?whName(lt.warehouseId):"-"}</td><td>${locLabel(t.toLocationId)}</td>
+        <td class="num">${t.qty}</td><td class="muted">${t.userName||"-"}</td></tr>`;}).join("")}
+      </tbody></table></div>`:`<div class="empty">ยังไม่มีรายการย้ายคลัง</div>`}`;
+};
+
+/* =========================================================
+   MASTER DATA — Products / Warehouses / Locations / Users
+   ========================================================= */
+function genericTable(cols,rows){
+  return `<div class="tbl-wrap"><table><thead><tr>${cols.map(c=>`<th class="${c.num?'num':''}">${c.h}</th>`).join("")}<th>จัดการ</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ----- Products ----- */
+RENDER.products=function(){
+  const el=document.getElementById("v-products");
+  el.innerHTML=`
+    <h2 class="page">ข้อมูลสินค้า</h2>
+    <div class="toolbar"><input id="pr-q" class="grow" placeholder="🔎 ค้นหา" oninput="renderProducts()">
+      <button class="btn sm" onclick="editProduct()">➕ เพิ่มสินค้า</button></div>
+    <div id="prod-table"></div>`;
+  renderProducts();
+};
+function renderProducts(){
+  const q=(document.getElementById("pr-q")?.value||"").toLowerCase().trim();
+  let list=DB.products.slice();
+  if(q) list=list.filter(p=>(p.code+p.name+p.barcode+p.category).toLowerCase().includes(q));
+  const rows=list.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td class="muted">${p.barcode}</td>
+    <td>${p.unit}</td><td>${p.category}</td>
+    <td><div class="row-actions"><button class="icon-btn" onclick="editProduct('${p.id}')">แก้ไข</button>
+    <button class="icon-btn del" onclick="delProduct('${p.id}')">ลบ</button></div></td></tr>`).join("");
+  document.getElementById("prod-table").innerHTML=list.length?
+    genericTable([{h:"รหัส"},{h:"ชื่อ"},{h:"บาร์โค้ด"},{h:"หน่วย"},{h:"หมวดหมู่"}],rows):`<div class="empty">ไม่พบสินค้า</div>`;
+}
+function editProduct(id){
+  const p=id?byId(DB.products,id):{code:"",name:"",barcode:"",unit:"",category:""};
+  openModal(id?"แก้ไขสินค้า":"เพิ่มสินค้า",`
+    <div class="fgrid">
+      <div class="field"><label>รหัสสินค้า*</label><input id="m-code" value="${p.code}"></div>
+      <div class="field"><label>บาร์โค้ด*</label><input id="m-barcode" value="${p.barcode}"></div>
+    </div>
+    <div class="field"><label>ชื่อสินค้า*</label><input id="m-name" value="${p.name}"></div>
+    <div class="fgrid">
+      <div class="field"><label>หน่วยนับ*</label><input id="m-unit" value="${p.unit}" placeholder="ชิ้น/กล่อง"></div>
+      <div class="field"><label>หมวดหมู่</label><input id="m-cat" value="${p.category}"></div>
+    </div>`,
+    ()=>{
+      const code=val("m-code"),barcode=val("m-barcode"),name=val("m-name"),unit=val("m-unit"),cat=val("m-cat");
+      if(!code||!name||!barcode||!unit){ alert("กรอกข้อมูลที่มี * ให้ครบ"); return false; }
+      if(DB.products.some(x=>x.id!==id&&(x.code===code||x.barcode===barcode))){ alert("รหัสหรือบาร์โค้ดซ้ำ"); return false; }
+      if(id){ Object.assign(p,{code,name,barcode,unit,category:cat}); }
+      else DB.products.push({id:uid("p"),code,name,barcode,unit,category:cat});
+      saveDB(); renderProducts(); flash(true,"บันทึกแล้ว",name); return true;
+    });
+}
+function delProduct(id){
+  if(DB.stock.some(s=>s.productId===id)){ alert("ลบไม่ได้: สินค้านี้ยังมีสต็อกคงเหลือ"); return; }
+  if(!confirm("ยืนยันลบสินค้า?")) return;
+  DB.products=DB.products.filter(p=>p.id!==id); saveDB(); renderProducts();
+}
+
+/* ----- Warehouses ----- */
+RENDER.warehouses=function(){
+  const el=document.getElementById("v-warehouses");
+  el.innerHTML=`<h2 class="page">คลัง / อาคาร</h2>
+    <div class="toolbar"><button class="btn sm" onclick="editWh()">➕ เพิ่มคลัง</button></div>
+    <div id="wh-table"></div>`;
+  renderWh();
+};
+function renderWh(){
+  const rows=DB.warehouses.map(w=>{
+    const locs=DB.locations.filter(l=>l.warehouseId===w.id).length;
+    return `<tr><td>${w.code}</td><td>${w.name}</td><td class="num">${locs}</td>
+    <td><div class="row-actions"><button class="icon-btn" onclick="editWh('${w.id}')">แก้ไข</button>
+    <button class="icon-btn del" onclick="delWh('${w.id}')">ลบ</button></div></td></tr>`;}).join("");
+  document.getElementById("wh-table").innerHTML=genericTable([{h:"รหัส"},{h:"ชื่อคลัง"},{h:"จำนวนตำแหน่ง",num:true}],rows);
+}
+function editWh(id){
+  const w=id?byId(DB.warehouses,id):{code:"",name:""};
+  openModal(id?"แก้ไขคลัง":"เพิ่มคลัง",`
+    <div class="field"><label>รหัสคลัง*</label><input id="m-code" value="${w.code}" placeholder="WH-C"></div>
+    <div class="field"><label>ชื่อคลัง*</label><input id="m-name" value="${w.name}"></div>`,
+    ()=>{const code=val("m-code"),name=val("m-name");
+      if(!code||!name){alert("กรอกให้ครบ");return false;}
+      if(id)Object.assign(w,{code,name}); else DB.warehouses.push({id:uid("w"),code,name});
+      saveDB();renderWh();flash(true,"บันทึกแล้ว",name);return true;});
+}
+function delWh(id){
+  if(DB.locations.some(l=>l.warehouseId===id)){alert("ลบไม่ได้: ยังมีตำแหน่งจัดเก็บในคลังนี้");return;}
+  if(!confirm("ยืนยันลบคลัง?"))return;
+  DB.warehouses=DB.warehouses.filter(w=>w.id!==id);saveDB();renderWh();
+}
+
+/* ----- Locations ----- */
+RENDER.locations=function(){
+  const el=document.getElementById("v-locations");
+  el.innerHTML=`<h2 class="page">ตำแหน่งจัดเก็บ (Location)</h2>
+    <div class="page-sub">แต่ละตำแหน่งมีบาร์โค้ดประจำตำแหน่ง + กำหนดความจุได้</div>
+    <div class="toolbar">
+      <input id="loc-q" class="grow" placeholder="🔎 ค้นหา" oninput="renderLocs()">
+      <select id="loc-wh" onchange="renderLocs()"><option value="">ทุกคลัง</option>${DB.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join("")}</select>
+      <button class="btn sm" onclick="editLoc()">➕ เพิ่มตำแหน่ง</button>
+      <button class="btn gray sm" onclick="exportLocs()">⬇ CSV</button>
+    </div>
+    <div id="loc-table"></div>`;
+  renderLocs();
+};
+function renderLocs(){
+  const q=(document.getElementById("loc-q")?.value||"").toLowerCase().trim();
+  const wh=document.getElementById("loc-wh")?.value||"";
+  let list=DB.locations.slice();
+  if(wh)list=list.filter(l=>l.warehouseId===wh);
+  if(q)list=list.filter(l=>(l.code+l.barcode+l.zone+whName(l.warehouseId)).toLowerCase().includes(q));
+  const rows=list.map(l=>{
+    const used=DB.stock.filter(s=>s.locationId===l.id).reduce((a,b)=>a+b.qty,0);
+    const pct=l.capacity?Math.round(used/l.capacity*100):0;
+    return `<tr><td>${l.code}</td><td>${whName(l.warehouseId)}</td><td>${l.zone}/${l.bay}</td>
+    <td class="muted">${l.barcode}</td><td class="num">${used}/${l.capacity} <span class="muted">(${pct}%)</span></td>
+    <td><div class="row-actions"><button class="icon-btn" onclick="editLoc('${l.id}')">แก้ไข</button>
+    <button class="icon-btn del" onclick="delLoc('${l.id}')">ลบ</button></div></td></tr>`;}).join("");
+  document.getElementById("loc-table").innerHTML=list.length?
+    genericTable([{h:"รหัสตำแหน่ง"},{h:"คลัง"},{h:"Zone/Bay"},{h:"บาร์โค้ด"},{h:"ใช้/ความจุ",num:true}],rows):`<div class="empty">ไม่พบตำแหน่ง</div>`;
+}
+function editLoc(id){
+  const l=id?byId(DB.locations,id):{code:"",warehouseId:DB.warehouses[0]?.id,zone:"",bay:"",barcode:"",capacity:500};
+  openModal(id?"แก้ไขตำแหน่ง":"เพิ่มตำแหน่ง",`
+    <div class="field"><label>คลัง*</label><select id="m-wh">${DB.warehouses.map(w=>`<option value="${w.id}" ${w.id===l.warehouseId?'selected':''}>${w.name}</option>`).join("")}</select></div>
+    <div class="fgrid">
+      <div class="field"><label>Zone*</label><input id="m-zone" value="${l.zone}"></div>
+      <div class="field"><label>Bay*</label><input id="m-bay" value="${l.bay}"></div>
+    </div>
+    <div class="field"><label>รหัสตำแหน่ง*</label><input id="m-code" value="${l.code}" placeholder="WH-A-A1-1"></div>
+    <div class="fgrid">
+      <div class="field"><label>บาร์โค้ดตำแหน่ง*</label><input id="m-barcode" value="${l.barcode}"></div>
+      <div class="field"><label>ความจุ</label><input id="m-cap" type="number" value="${l.capacity}"></div>
+    </div>
+    <button class="btn gray sm" onclick="autoBarcode()" type="button" style="margin-top:6px">⚙ สร้างบาร์โค้ดจากรหัส</button>`,
+    ()=>{
+      const code=val("m-code"),wh=val("m-wh"),zone=val("m-zone"),bay=val("m-bay"),barcode=val("m-barcode"),cap=Number(val("m-cap"))||0;
+      if(!code||!zone||!bay||!barcode){alert("กรอกข้อมูลที่มี * ให้ครบ");return false;}
+      if(DB.locations.some(x=>x.id!==id&&(x.code===code||x.barcode===barcode))){alert("รหัสหรือบาร์โค้ดซ้ำ");return false;}
+      if(id)Object.assign(l,{code,warehouseId:wh,zone,bay,barcode,capacity:cap});
+      else DB.locations.push({id:uid("loc"),code,warehouseId:wh,zone,bay,barcode,capacity:cap});
+      saveDB();renderLocs();flash(true,"บันทึกแล้ว",code);return true;});
+}
+function autoBarcode(){
+  const code=val("m-code"); if(!code){alert("ใส่รหัสตำแหน่งก่อน");return;}
+  document.getElementById("m-barcode").value="LOC"+code.replace(/-/g,"");
+}
+function delLoc(id){
+  if(DB.stock.some(s=>s.locationId===id)){alert("ลบไม่ได้: ตำแหน่งนี้ยังมีสต็อก");return;}
+  if(!confirm("ยืนยันลบตำแหน่ง?"))return;
+  DB.locations=DB.locations.filter(l=>l.id!==id);saveDB();renderLocs();
+}
+
+/* ----- Users ----- */
+RENDER.users=function(){
+  const el=document.getElementById("v-users");
+  el.innerHTML=`<h2 class="page">ผู้ใช้งาน & สิทธิ์</h2>
+    <div class="toolbar"><button class="btn sm" onclick="editUser()">➕ เพิ่มผู้ใช้</button></div>
+    <div id="user-table"></div>`;
+  renderUsers();
+};
+function renderUsers(){
+  const rows=DB.users.map(u=>`<tr><td>${u.username}</td><td>${u.name}</td>
+    <td><span class="role-badge ${u.role==='staff'?'staff':''}">${u.role==='admin'?'ผู้ดูแลระบบ':'พนักงานคลัง'}</span></td>
+    <td><div class="row-actions"><button class="icon-btn" onclick="editUser('${u.id}')">แก้ไข</button>
+    <button class="icon-btn del" onclick="delUser('${u.id}')">ลบ</button></div></td></tr>`).join("");
+  document.getElementById("user-table").innerHTML=genericTable([{h:"Username"},{h:"ชื่อ"},{h:"สิทธิ์"}],rows);
+}
+function editUser(id){
+  const u=id?byId(DB.users,id):{username:"",name:"",password:"",role:"staff"};
+  openModal(id?"แก้ไขผู้ใช้":"เพิ่มผู้ใช้",`
+    <div class="field"><label>Username*</label><input id="m-user" value="${u.username}"></div>
+    <div class="field"><label>ชื่อ-สกุล*</label><input id="m-name" value="${u.name}"></div>
+    <div class="field"><label>รหัสผ่าน*</label><input id="m-pass" value="${u.password||''}"></div>
+    <div class="field"><label>สิทธิ์*</label><select id="m-role">
+      <option value="admin" ${u.role==='admin'?'selected':''}>ผู้ดูแลระบบ (Admin)</option>
+      <option value="staff" ${u.role==='staff'?'selected':''}>พนักงานคลัง</option></select></div>`,
+    ()=>{
+      const username=val("m-user"),name=val("m-name"),password=val("m-pass"),role=val("m-role");
+      if(!username||!name||!password){alert("กรอกให้ครบ");return false;}
+      if(DB.users.some(x=>x.id!==id&&x.username===username)){alert("username ซ้ำ");return false;}
+      if(id)Object.assign(u,{username,name,password,role});
+      else DB.users.push({id:uid("u"),username,name,password,role});
+      saveDB();renderUsers();flash(true,"บันทึกแล้ว",name);return true;});
+}
+function delUser(id){
+  if(id===SESSION.userId){alert("ลบบัญชีตัวเองไม่ได้");return;}
+  if(DB.users.filter(u=>u.role==='admin').length<=1 && byId(DB.users,id).role==='admin'){alert("ต้องมีผู้ดูแลอย่างน้อย 1 คน");return;}
+  if(!confirm("ยืนยันลบผู้ใช้?"))return;
+  DB.users=DB.users.filter(u=>u.id!==id);saveDB();renderUsers();
+}
+
+/* =========================================================
+   MODAL helper
+   ========================================================= */
+let modalSave=null;
+function openModal(title,body,onsave){
+  modalSave=onsave;
+  document.getElementById("modal").innerHTML=`<h3>${title}</h3>${body}
+    <div class="modal-actions"><button class="btn gray" onclick="closeModal()">ยกเลิก</button>
+    <button class="btn" onclick="saveModal()">บันทึก</button></div>`;
+  document.getElementById("modal-bg").classList.add("on");
+}
+function closeModal(){document.getElementById("modal-bg").classList.remove("on");modalSave=null;}
+function saveModal(){ if(modalSave&&modalSave()!==false) closeModal(); }
+function val(id){return (document.getElementById(id)?.value||"").trim();}
+document.getElementById("modal-bg").addEventListener("click",e=>{if(e.target.id==="modal-bg")closeModal();});
+
+/* =========================================================
+   EXPORT — CSV (UTF-8 BOM) + XLSX (SheetJS)
+   ========================================================= */
+function download(filename,content,mime){
+  const blob=new Blob(["﻿"+content],{type:mime});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function toCSV(headers,rows){
+  const esc=v=>{v=(v==null?"":String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  return [headers.join(","),...rows.map(r=>r.map(esc).join(","))].join("\n");
+}
+function toXLSX(filename,headers,rows){
+  if(typeof XLSX==="undefined"){alert("ไลบรารี Excel ยังโหลดไม่เสร็จ (ต้องมีอินเทอร์เน็ต) — ใช้ CSV แทนได้");return;}
+  const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
+  XLSX.writeFile(wb,filename);
+}
+const stamp=()=>new Date().toLocaleString("en-CA",{timeZone:"Asia/Bangkok"}).replace(/[:\s]/g,"-").replace(",","");
+
+function exportStock(fmt){
+  const rows=stockRows();
+  const H=["รหัสสินค้า","ชื่อสินค้า","บาร์โค้ด","คลัง","ตำแหน่ง","คงเหลือ","หน่วย"];
+  const data=rows.map(r=>[r.p.code,r.p.name,r.p.barcode,r.wh,r.l.code,r.qty,r.p.unit]);
+  if(fmt==="xlsx")toXLSX(`stock_${stamp()}.xlsx`,H,data);
+  else download(`stock_${stamp()}.csv`,toCSV(H,data),"text/csv;charset=utf-8");
+}
+function exportLog(fmt){
+  const rows=logRows();
+  const tpMap={in:"รับเข้า",out:"ตัดออก",move:"ย้ายคลัง"};
+  const H=["เวลา(ไทย)","ประเภท","รหัสสินค้า","สินค้า","จาก","ไป","จำนวน","เหตุผล","หมายเหตุ","ผู้ทำ"];
+  const data=rows.map(t=>[fmtBKK(t.ts),tpMap[t.type],byId(DB.products,t.productId)?.code||"",
+    byId(DB.products,t.productId)?.name||"",t.fromLocationId?locLabel(t.fromLocationId):"",
+    t.toLocationId?locLabel(t.toLocationId):"",t.qty,t.reason||"",t.note||"",t.userName||""]);
+  if(fmt==="xlsx")toXLSX(`transaction_log_${stamp()}.xlsx`,H,data);
+  else download(`transaction_log_${stamp()}.csv`,toCSV(H,data),"text/csv;charset=utf-8");
+}
+function exportTransfer(fmt){
+  const moves=DB.txns.filter(t=>t.type==="move");
+  const H=["เวลา(ไทย)","รหัสสินค้า","สินค้า","จากคลัง","ตำแหน่งต้นทาง","ไปคลัง","ตำแหน่งปลายทาง","จำนวน","ผู้ทำ"];
+  const data=moves.map(t=>{const lf=byId(DB.locations,t.fromLocationId),lt=byId(DB.locations,t.toLocationId);
+    return [fmtBKK(t.ts),byId(DB.products,t.productId)?.code||"",byId(DB.products,t.productId)?.name||"",
+      lf?whName(lf.warehouseId):"",locLabel(t.fromLocationId),lt?whName(lt.warehouseId):"",locLabel(t.toLocationId),t.qty,t.userName||""];});
+  if(fmt==="xlsx")toXLSX(`transfer_${stamp()}.xlsx`,H,data);
+  else download(`transfer_${stamp()}.csv`,toCSV(H,data),"text/csv;charset=utf-8");
+}
+function exportLocs(){
+  const H=["รหัสตำแหน่ง","คลัง","Zone","Bay","บาร์โค้ด","ความจุ"];
+  const data=DB.locations.map(l=>[l.code,whName(l.warehouseId),l.zone,l.bay,l.barcode,l.capacity]);
+  download(`locations_${stamp()}.csv`,toCSV(H,data),"text/csv;charset=utf-8");
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+loadDB();
+restoreSession();
+// unlock audio on first interaction
+document.addEventListener("click",()=>{try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();}catch(e){}},{once:true});
+</script>
+</body>
+</html>
