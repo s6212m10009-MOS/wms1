@@ -172,7 +172,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <button class="btn full" type="submit">เข้าสู่ระบบ</button>
     <div class="hint">
       ผู้ดูแล: <b>admin / 1234</b><br>
-      พนักงานคลัง: <b>staff / 1234</b>
+      พนักงานคลัง: <b>staff / 1234</b><br>
+      <span id="ver-login" style="opacity:.55"></span>
     </div>
   </form>
 </div>
@@ -216,6 +217,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 "use strict";
 const DB_KEY = "wms_db_v1";
 const SESSION_KEY = "wms_session";
+const APP_VERSION = "v1.4 · 13-06-2026";
 const uid = (p="id")=> p+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 /* ---------- Bangkok time ---------- */
@@ -529,7 +531,7 @@ RENDER.scan=function(){
   const el=document.getElementById("v-scan");
   el.innerHTML=`
     <h2 class="page">สแกนบาร์โค้ด</h2>
-    <div class="page-sub">เครื่องยิงบาร์โค้ด (USB/Bluetooth) ทำงานทันที · หรือกดใช้กล้องมือถือ · กด Enter เพื่อยืนยันอัตโนมัติ</div>
+    <div class="page-sub">เครื่องยิงบาร์โค้ด (USB/Bluetooth) ทำงานทันที · หรือกดใช้กล้องมือถือ · กด Enter เพื่อยืนยันอัตโนมัติ · <span style="opacity:.6">${APP_VERSION}</span></div>
     <div class="modes">
       <button class="mode-btn in" data-m="in" onclick="setMode('in')"><span class="ic">➕</span>ตัดเข้า<small>รับสินค้า</small></button>
       <button class="mode-btn out" data-m="out" onclick="setMode('out')"><span class="ic">➖</span>ตัดออก<small>เบิก/ขาย/เสีย</small></button>
@@ -1174,6 +1176,7 @@ function exportLocs(){
    BOOT
    ========================================================= */
 loadDB();
+(function(){const vl=document.getElementById("ver-login"); if(vl) vl.textContent="เวอร์ชัน "+APP_VERSION;})();
 restoreSession();
 // unlock audio on first interaction
 document.addEventListener("click",()=>{try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();}catch(e){}},{once:true});
